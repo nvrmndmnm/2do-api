@@ -1,0 +1,70 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:14.1
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env.dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: bash -c "python manage.py migrate --no-input && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./source:/code
+    ports:
+      - "8000:8000"
+    links:
+      - db
+    depends_on:
+      - db
+    env_file:
+      - .env.dev
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A todo worker -l info
+    volumes:
+      - ./source:/code
+    depends_on:
+      - db
+      - redis
+    environment:
+      - TZ=Asia/Almaty
+    env_file:
+      - .env.dev
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A todo beat -l info
+    volumes:
+      - ./source:/code
+    depends_on:
+      - db
+      - redis
+    environment:
+      - TZ=Asia/Almaty
+    env_file:
+      - .env.dev
+
+volumes:
+  postgres_data:
